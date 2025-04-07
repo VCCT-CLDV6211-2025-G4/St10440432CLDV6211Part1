@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿//st10440432
+//Matteo Nusca
+using System.ComponentModel.DataAnnotations;
 
 public class Booking // Define the Booking data model.
 {

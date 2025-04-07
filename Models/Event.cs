@@ -1,6 +1,8 @@
 ﻿using BookingSystemCLVD.Models;
 using System.ComponentModel.DataAnnotations;
 
+//st10440432
+//Matteo Nusca
 public class Event // Define the Event data model.
 {
     public int EventId { get; set; } // Primary key for Event.

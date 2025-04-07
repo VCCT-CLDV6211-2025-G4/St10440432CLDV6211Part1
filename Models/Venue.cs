@@ -1,6 +1,7 @@
 ﻿using BookingSystemCLVD.Models; 
-using System.ComponentModel.DataAnnotations; 
-
+using System.ComponentModel.DataAnnotations;
+//st10440432
+//Matteo Nusca
 public class Venue // Define the Venue data model.
 {
     public int VenueId { get; set; } // Primary key for Venue.
