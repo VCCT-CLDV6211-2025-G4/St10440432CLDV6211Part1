@@ -15,4 +15,3 @@ public class Booking // Define the Booking data model.
     public int EventId { get; set; } // Foreign key for Event.
     public Event? Event { get; set; } // Navigation property to Event.
 }
-

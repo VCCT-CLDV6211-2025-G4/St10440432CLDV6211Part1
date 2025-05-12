@@ -1,4 +1,5 @@
 using BookingSystemCLVD.Data;
+using BookingSystemCLVD.Services;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args); // Create web app builder.
@@ -6,7 +7,10 @@ var builder = WebApplication.CreateBuilder(args); // Create web app builder.
 // Add services to the container.
 builder.Services.AddControllersWithViews(); // Add MVC controllers and views.
 builder.Services.AddDbContext<ApplicationDbContext>(options => // Add database context.
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))); // Use SQL Server.
+options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"))); // Use SQL Server.
+
+// Register AzureBlobService as a singleton.
+
 
 var app = builder.Build(); // Build the web application.
 

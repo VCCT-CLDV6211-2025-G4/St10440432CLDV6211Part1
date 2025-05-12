@@ -1,118 +1,139 @@
-﻿//st10440432
-//Matteo Nusca
+﻿using BookingSystemCLVD.Data;
+using BookingSystemCLVD.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using BookingSystemCLVD.Data;
-using BookingSystemCLVD.Models;
+using System.Linq;
+using System.Threading.Tasks;
 
 public class BookingController : Controller
 {
-    private readonly ApplicationDbContext _context; // Database context.
+    private readonly ApplicationDbContext _context;
 
-    public BookingController(ApplicationDbContext context) // Constructor for dependency.
+    public BookingController(ApplicationDbContext context)
     {
         _context = context;
     }
 
-    public async Task<IActionResult> Index() => // Show all bookings.
-        View(await _context.Bookings.Include(b => b.Event).ToListAsync());
-
-    public async Task<IActionResult> Details(int? id) // Show details of one booking.
+    // GET: Booking
+    public async Task<IActionResult> Index()
     {
-        if (id == null) return NotFound(); // Handle missing ID.
-
-        var booking = await _context.Bookings // Find booking with related event.
-            .Include(b => b.Event)
-            .FirstOrDefaultAsync(m => m.BookingId == id);
-
-        if (booking == null) return NotFound(); // Booking not found.
-
-        return View(booking); // Display booking details.
+        // Include related Event data when listing bookings
+        var bookings = await _context.Bookings
+                                     .Include(b => b.Event)
+                                     .ToListAsync();
+        return View(bookings);
     }
 
-    public IActionResult Create() // Show create booking form.
+    // GET: Booking/Details/5
+    public async Task<IActionResult> Details(int? id)
     {
-        // Populate EventId dropdown.
+        if (id == null)
+            return NotFound();
+
+        // Fetch booking with associated event
+        var booking = await _context.Bookings
+                                    .Include(b => b.Event)
+                                    .FirstOrDefaultAsync(m => m.BookingId == id);
+        if (booking == null)
+            return NotFound();
+
+        return View(booking);
+    }
+
+    // GET: Booking/Create
+    public IActionResult Create()
+    {
+        // Populate Event dropdown list
         ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName");
-        return View(); // Display create form.
+        return View();
     }
 
-    [HttpPost] // Handle create form submission.
-    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
+    // POST: Booking/Create
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind("BookingId,AttendeeName,AttendeeEmail,EventId")] Booking booking)
     {
-        if (ModelState.IsValid) // Check if input is valid.
+        if (ModelState.IsValid)
         {
-            _context.Add(booking); // Add new booking to database.
-            await _context.SaveChangesAsync(); // Save changes to database.
-            return RedirectToAction(nameof(Index)); // Redirect to booking list.
+            _context.Add(booking);
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
         }
 
-        // Repopulate dropdown on error.
+        // Repopulate Event dropdown if model is invalid
         ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName", booking.EventId);
-        return View(booking); // Redisplay form with errors.
+        return View(booking);
     }
 
-    public async Task<IActionResult> Edit(int? id) // Show edit booking form.
+    // GET: Booking/Edit/5
+    public async Task<IActionResult> Edit(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null)
+            return NotFound();
 
-        var booking = await _context.Bookings.FindAsync(id); // Find booking to edit.
-        if (booking == null) return NotFound(); // Booking not found.
+        var booking = await _context.Bookings.FindAsync(id);
+        if (booking == null)
+            return NotFound();
 
-        // Populate EventId dropdown.
+        // Populate Event dropdown with selected value
         ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName", booking.EventId);
-        return View(booking); // Display edit form.
+        return View(booking);
     }
 
-    [HttpPost] // Handle edit form submission.
-    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
+    // POST: Booking/Edit/5
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(int id, [Bind("BookingId,AttendeeName,AttendeeEmail,EventId")] Booking booking)
     {
-        if (id != booking.BookingId) return NotFound(); // ID mismatch.
+        if (id != booking.BookingId)
+            return NotFound();
 
-        if (ModelState.IsValid) // Check if input is valid.
+        if (ModelState.IsValid)
         {
             try
             {
-                _context.Update(booking); // Update existing booking.
-                await _context.SaveChangesAsync(); // Save changes to database.
+                _context.Update(booking);
+                await _context.SaveChangesAsync();
             }
-            catch (DbUpdateConcurrencyException) // Handle database update conflicts.
+            catch (DbUpdateConcurrencyException)
             {
-                if (!_context.Bookings.Any(e => e.BookingId == id)) // Booking not found.
+                if (!_context.Bookings.Any(e => e.BookingId == id))
                     return NotFound();
-                else throw; // Re-throw other exceptions.
+                else
+                    throw;
             }
-
-            return RedirectToAction(nameof(Index)); // Redirect to booking list.
+            return RedirectToAction(nameof(Index));
         }
 
-        // Repopulate dropdown on error.
+        // Repopulate Event dropdown on error
         ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName", booking.EventId);
-        return View(booking); // Redisplay form with errors.
+        return View(booking);
     }
 
-    public async Task<IActionResult> Delete(int? id) // Show delete confirmation form.
+    // GET: Booking/Delete/5
+    public async Task<IActionResult> Delete(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null)
+            return NotFound();
 
-        var booking = await _context.Bookings // Find booking for deletion.
-            .Include(b => b.Event)
-            .FirstOrDefaultAsync(m => m.BookingId == id);
+        // Fetch booking and related event
+        var booking = await _context.Bookings
+                                    .Include(b => b.Event)
+                                    .FirstOrDefaultAsync(m => m.BookingId == id);
+        if (booking == null)
+            return NotFound();
 
-        if (booking == null) return NotFound(); // Booking not found.
-
-        return View(booking); // Display delete confirmation.
+        return View(booking);
     }
 
-    [HttpPost, ActionName("Delete")] // Handle delete confirmation submission.
-    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
+    // POST: Booking/Delete/5
+    [HttpPost, ActionName("Delete")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
-        var booking = await _context.Bookings.FindAsync(id); // Find booking to delete.
-        _context.Bookings.Remove(booking); // Remove booking from database.
-        await _context.SaveChangesAsync(); // Save changes to database.
-        return RedirectToAction(nameof(Index)); // Redirect to booking list.
+        var booking = await _context.Bookings.FindAsync(id);
+        _context.Bookings.Remove(booking);
+        await _context.SaveChangesAsync();
+        return RedirectToAction(nameof(Index));
     }
 }

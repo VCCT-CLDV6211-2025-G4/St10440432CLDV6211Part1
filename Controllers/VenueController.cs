@@ -1,112 +1,133 @@
 ﻿//st10440432
 //Matteo Nusca
-using BookingSystemCLVD.Data;
-using BookingSystemCLVD.Models; 
-using Microsoft.AspNetCore.Mvc; 
-using Microsoft.EntityFrameworkCore; 
 
-public class VenueController : Controller // Define the Venue controller.
+using BookingSystemCLVD.Data;
+using BookingSystemCLVD.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
+using System.Threading.Tasks;
+using BookingSystemCLVD.Services;
+
+public class VenueController : Controller
 {
-    private readonly ApplicationDbContext _context; // Database context instance.
+    private readonly ApplicationDbContext _context; // Database context.
 
     public VenueController(ApplicationDbContext context) // Constructor for dependency injection.
     {
         _context = context;
     }
 
-    // GET: Venues
-    public async Task<IActionResult> Index() // Show a list of venues.
+    // GET: Venues - Display list of all venues.
+    public async Task<IActionResult> Index()
     {
-        return View(await _context.Venues.ToListAsync()); // Get all venues.
+        return View(await _context.Venues.ToListAsync()); // Retrieve all venues from database.
     }
 
-    // GET: Venues/Details/5
-    public async Task<IActionResult> Details(int? id) // Show details for a venue.
+    // GET: Venues/Details/5 - Display venue details by ID.
+    public async Task<IActionResult> Details(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null)
+            return NotFound(); // Return 404 if no ID provided.
 
-        var venue = await _context.Venues // Find venue by ID.
-            .FirstOrDefaultAsync(m => m.VenueId == id);
-        if (venue == null) return NotFound(); // Venue not found.
+        var venue = await _context.Venues
+            .FirstOrDefaultAsync(m => m.VenueId == id); // Find venue by ID.
 
-        return View(venue); // Display venue details.
+        if (venue == null)
+            return NotFound(); // Return 404 if venue not found.
+
+        return View(venue); // Show venue details.
     }
 
-    // GET: Venues/Create
-    public IActionResult Create() // Show create venue form.
+    // GET: Venues/Create - Display create venue form.
+    public IActionResult Create()
     {
-        return View(); // Display the create form.
+        return View(); // Show empty venue form.
     }
 
-    // POST: Venues/Create
-    [HttpPost] // Handle create form submission.
-    [ValidateAntiForgeryToken] // Prevent request forgery.
-    public async Task<IActionResult> Create([Bind("VenueId,VenueName,Location,Capacity,ImageUrl")] Venue venue)
+    // POST: Venues/Create - Handle new venue submission.
+    [HttpPost]
+    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
+    public async Task<IActionResult> Create(Venue venue, IFormFile ImageFile, [FromServices] AzureBlobService blobService)
     {
-        if (ModelState.IsValid) // Check if input is valid.
+        if (ModelState.IsValid) // Validate input.
         {
-            _context.Add(venue); // Add new venue to database.
-            await _context.SaveChangesAsync(); // Save changes to database.
-            return RedirectToAction(nameof(Index)); // Go to venue list.
+            if (ImageFile != null) // Check if image was uploaded.
+                venue.ImageUrl = await blobService.UploadFileAsync(ImageFile); // Upload image to Azure Blob.
+
+            _context.Add(venue); // Add venue to database.
+            await _context.SaveChangesAsync(); // Save changes.
+            return RedirectToAction(nameof(Index)); // Go back to venue list.
         }
-        return View(venue); // Redisplay form with errors.
+
+        return View(venue); // Show form again if model state invalid.
     }
 
-    // GET: Venues/Edit/5
-    public async Task<IActionResult> Edit(int? id) // Show edit venue form.
+    // GET: Venues/Edit/5 - Display edit form for selected venue.
+    public async Task<IActionResult> Edit(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null)
+            return NotFound(); // Return 404 if ID not provided.
 
-        var venue = await _context.Venues.FindAsync(id); // Find venue to edit.
-        if (venue == null) return NotFound(); // Venue not found.
-        return View(venue); // Display the edit form.
+        var venue = await _context.Venues.FindAsync(id); // Find venue.
+        if (venue == null)
+            return NotFound(); // Return 404 if venue not found.
+
+        return View(venue); // Show edit form.
     }
 
-    // POST: Venues/Edit/5
-    [HttpPost] // Handle edit form submission.
-    [ValidateAntiForgeryToken] // Prevent request forgery.
+    // POST: Venues/Edit/5 - Handle venue update.
+    [HttpPost]
+    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
     public async Task<IActionResult> Edit(int id, [Bind("VenueId,VenueName,Location,Capacity,ImageUrl")] Venue venue)
     {
-        if (id != venue.VenueId) return NotFound(); // ID mismatch.
+        if (id != venue.VenueId)
+            return NotFound(); // ID mismatch - return 404.
 
-        if (ModelState.IsValid) // Check if input is valid.
+        if (ModelState.IsValid) // Validate input.
         {
             try
             {
-                _context.Update(venue); // Update existing venue.
-                await _context.SaveChangesAsync(); // Save changes to database.
+                _context.Update(venue); // Update venue in database.
+                await _context.SaveChangesAsync(); // Save changes.
             }
-            catch (DbUpdateConcurrencyException) // Handle update conflicts.
+            catch (DbUpdateConcurrencyException) // Handle concurrency error.
             {
-                if (!_context.Venues.Any(e => e.VenueId == id)) // Venue not found.
-                    return NotFound();
-                else throw; // Re-throw other errors.
+                if (!_context.Venues.Any(e => e.VenueId == id)) // Check if venue exists.
+                    return NotFound(); // Return 404 if not found.
+                else
+                    throw; // Re-throw error if it's something else.
             }
-            return RedirectToAction(nameof(Index)); // Go to venue list.
+
+            return RedirectToAction(nameof(Index)); // Go back to venue list.
         }
-        return View(venue); // Redisplay form with errors.
+
+        return View(venue); // Show form again if model invalid.
     }
 
-    // GET: Venues/Delete/5
-    public async Task<IActionResult> Delete(int? id) // Show delete confirmation.
+    // GET: Venues/Delete/5 - Confirm deletion of venue.
+    public async Task<IActionResult> Delete(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null)
+            return NotFound(); // Return 404 if no ID.
 
-        var venue = await _context.Venues // Find venue to delete.
-            .FirstOrDefaultAsync(m => m.VenueId == id);
-        if (venue == null) return NotFound(); // Venue not found.
+        var venue = await _context.Venues
+            .FirstOrDefaultAsync(m => m.VenueId == id); // Find venue by ID.
 
-        return View(venue); // Display delete view.
+        if (venue == null)
+            return NotFound(); // Return 404 if not found.
+
+        return View(venue); // Show delete confirmation.
     }
 
-    // POST: Venues/Delete/5
-    [HttpPost, ActionName("Delete")] // Handle delete confirmation.
-    [ValidateAntiForgeryToken] // Prevent request forgery.
+    // POST: Venues/Delete/5 - Handle confirmed deletion.
+    [HttpPost, ActionName("Delete")]
+    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
-        var venue = await _context.Venues.FindAsync(id); // Find venue to delete.
-        _context.Venues.Remove(venue); // Remove venue from database.
-        await _context.SaveChangesAsync(); // Save database changes.
-        return RedirectToAction(nameof(Index)); // Go to venue list.
+        var venue = await _context.Venues.FindAsync(id); // Find venue by ID.
+        _context.Venues.Remove(venue); // Remove from database.
+        await _context.SaveChangesAsync(); // Save changes.
+        return RedirectToAction(nameof(Index)); // Go back to venue list.
     }
 }
