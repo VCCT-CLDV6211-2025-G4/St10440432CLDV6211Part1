@@ -3,131 +3,146 @@
 
 using BookingSystemCLVD.Data;
 using BookingSystemCLVD.Models;
+using BookingSystemCLVD.Services;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Http;
 using System.Threading.Tasks;
-using BookingSystemCLVD.Services;
 
 public class VenueController : Controller
 {
-    private readonly ApplicationDbContext _context; // Database context.
+    private readonly ApplicationDbContext _context;
 
-    public VenueController(ApplicationDbContext context) // Constructor for dependency injection.
+    public VenueController(ApplicationDbContext context)
     {
-        _context = context;
+        _context = context; // get database access
     }
 
-    // GET: Venues - Display list of all venues.
+    // Show list of all venues
     public async Task<IActionResult> Index()
     {
-        return View(await _context.Venues.ToListAsync()); // Retrieve all venues from database.
+        return View(await _context.Venues.ToListAsync());
     }
 
-    // GET: Venues/Details/5 - Display venue details by ID.
+    // Show details of one venue
     public async Task<IActionResult> Details(int? id)
     {
-        if (id == null)
-            return NotFound(); // Return 404 if no ID provided.
+        if (id == null) return NotFound();
 
         var venue = await _context.Venues
-            .FirstOrDefaultAsync(m => m.VenueId == id); // Find venue by ID.
+            .FirstOrDefaultAsync(m => m.VenueId == id);
 
-        if (venue == null)
-            return NotFound(); // Return 404 if venue not found.
+        if (venue == null) return NotFound();
 
-        return View(venue); // Show venue details.
+        return View(venue);
     }
 
-    // GET: Venues/Create - Display create venue form.
+    // Show the create venue form
     public IActionResult Create()
     {
-        return View(); // Show empty venue form.
+        return View();
     }
 
-    // POST: Venues/Create - Handle new venue submission.
+    // Handle form submission to create a venue
     [HttpPost]
-    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(Venue venue, IFormFile ImageFile, [FromServices] AzureBlobService blobService)
     {
-        if (ModelState.IsValid) // Validate input.
+        if (ModelState.IsValid)
         {
-            if (ImageFile != null) // Check if image was uploaded.
-                venue.ImageUrl = await blobService.UploadFileAsync(ImageFile); // Upload image to Azure Blob.
+            // Upload image to Azure if selected
+            if (ImageFile != null && ImageFile.Length > 0)
+            {
+                venue.ImageUrl = await blobService.UploadFileAsync(ImageFile);
+            }
 
-            _context.Add(venue); // Add venue to database.
-            await _context.SaveChangesAsync(); // Save changes.
-            return RedirectToAction(nameof(Index)); // Go back to venue list.
+            _context.Add(venue); // save venue to database
+            await _context.SaveChangesAsync();
+            return RedirectToAction(nameof(Index));
         }
 
-        return View(venue); // Show form again if model state invalid.
+        return View(venue); // show form again if error
     }
 
-    // GET: Venues/Edit/5 - Display edit form for selected venue.
+    // Show the edit form for a venue
     public async Task<IActionResult> Edit(int? id)
     {
-        if (id == null)
-            return NotFound(); // Return 404 if ID not provided.
+        if (id == null) return NotFound();
 
-        var venue = await _context.Venues.FindAsync(id); // Find venue.
-        if (venue == null)
-            return NotFound(); // Return 404 if venue not found.
+        var venue = await _context.Venues.FindAsync(id);
+        if (venue == null) return NotFound();
 
-        return View(venue); // Show edit form.
+        return View(venue);
     }
 
-    // POST: Venues/Edit/5 - Handle venue update.
+    // Handle edit form submission
     [HttpPost]
-    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
-    public async Task<IActionResult> Edit(int id, [Bind("VenueId,VenueName,Location,Capacity,ImageUrl")] Venue venue)
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Edit(int id, Venue venue, IFormFile ImageFile, [FromServices] AzureBlobService blobService)
     {
-        if (id != venue.VenueId)
-            return NotFound(); // ID mismatch - return 404.
+        if (id != venue.VenueId) return NotFound();
 
-        if (ModelState.IsValid) // Validate input.
+        if (ModelState.IsValid)
         {
             try
             {
-                _context.Update(venue); // Update venue in database.
-                await _context.SaveChangesAsync(); // Save changes.
-            }
-            catch (DbUpdateConcurrencyException) // Handle concurrency error.
-            {
-                if (!_context.Venues.Any(e => e.VenueId == id)) // Check if venue exists.
-                    return NotFound(); // Return 404 if not found.
-                else
-                    throw; // Re-throw error if it's something else.
-            }
+                // Upload new image if one is selected
+                if (ImageFile != null && ImageFile.Length > 0)
+                {
+                    venue.ImageUrl = await blobService.UploadFileAsync(ImageFile);
+                }
 
-            return RedirectToAction(nameof(Index)); // Go back to venue list.
+                _context.Update(venue); // update venue
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!await _context.Venues.AnyAsync(e => e.VenueId == id))
+                    return NotFound();
+                else
+                    throw;
+            }
         }
 
-        return View(venue); // Show form again if model invalid.
+        return View(venue); // show form again if error
     }
 
-    // GET: Venues/Delete/5 - Confirm deletion of venue.
+    // Show confirmation page to delete a venue
     public async Task<IActionResult> Delete(int? id)
     {
-        if (id == null)
-            return NotFound(); // Return 404 if no ID.
+        if (id == null) return NotFound();
 
         var venue = await _context.Venues
-            .FirstOrDefaultAsync(m => m.VenueId == id); // Find venue by ID.
+            .FirstOrDefaultAsync(m => m.VenueId == id);
 
-        if (venue == null)
-            return NotFound(); // Return 404 if not found.
+        if (venue == null) return NotFound();
 
-        return View(venue); // Show delete confirmation.
+        return View(venue);
     }
 
-    // POST: Venues/Delete/5 - Handle confirmed deletion.
+    // Handle actual deletion of venue
     [HttpPost, ActionName("Delete")]
-    [ValidateAntiForgeryToken] // Prevent cross-site request forgery.
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
-        var venue = await _context.Venues.FindAsync(id); // Find venue by ID.
-        _context.Venues.Remove(venue); // Remove from database.
-        await _context.SaveChangesAsync(); // Save changes.
-        return RedirectToAction(nameof(Index)); // Go back to venue list.
+        // Don't allow delete if venue is linked to events
+        var hasLinkedEvents = await _context.Events.AnyAsync(e => e.VenueId == id);
+        if (hasLinkedEvents)
+        {
+            ModelState.AddModelError("", "This venue cannot be deleted because it is associated with one or more events.");
+            var venue = await _context.Venues.FindAsync(id);
+            return View("Delete", venue);
+        }
+
+        // Proceed to delete
+        var venueToDelete = await _context.Venues.FindAsync(id);
+        if (venueToDelete != null)
+        {
+            _context.Venues.Remove(venueToDelete);
+            await _context.SaveChangesAsync();
+        }
+
+        return RedirectToAction(nameof(Index));
     }
 }

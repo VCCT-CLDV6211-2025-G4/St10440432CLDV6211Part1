@@ -1,113 +1,163 @@
 ﻿//st10440432
 //Matteo Nusca
-using Microsoft.AspNetCore.Mvc; 
-using Microsoft.EntityFrameworkCore; 
-using BookingSystemCLVD.Data; 
-using BookingSystemCLVD.Models; 
 
-public class EventController : Controller // Define the Event controller.
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.EntityFrameworkCore;
+using BookingSystemCLVD.Data;
+using BookingSystemCLVD.Models;
+
+public class EventController : Controller
 {
-    private readonly ApplicationDbContext _context; // Database context instance.
+    private readonly ApplicationDbContext _context;
 
-    public EventController(ApplicationDbContext context) // Constructor for dependency injection.
+    public EventController(ApplicationDbContext context)
     {
         _context = context;
     }
 
-    public async Task<IActionResult> Index() => // Show list of events.
-        View(await _context.Events.Include(e => e.Venue).ToListAsync()); // Include venue data.
-
-    public async Task<IActionResult> Details(int? id) // Show details of an event.
+    // Show all events
+    public async Task<IActionResult> Index()
     {
-        if (id == null) return NotFound(); // Handle missing event ID.
+        return View(await _context.Events.Include(e => e.Venue).ToListAsync());
+    }
 
-        var ev = await _context.Events // Find event with venue.
+    // Show details for one event
+    public async Task<IActionResult> Details(int? id)
+    {
+        if (id == null) return NotFound();
+
+        var ev = await _context.Events
             .Include(e => e.Venue)
             .FirstOrDefaultAsync(m => m.EventId == id);
-        if (ev == null) return NotFound(); // Event not found.
 
-        return View(ev); // Display event details.
+        if (ev == null) return NotFound();
+
+        return View(ev);
     }
 
-    public IActionResult Create() // Show create event form.
+    // Show create form
+    public IActionResult Create()
     {
-        // Populate VenueId dropdown.
-        ViewData["VenueId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Venues, "VenueId", "VenueName");
-        return View(); // Display create form.
+        ViewData["VenueId"] = new SelectList(_context.Venues, "VenueId", "VenueName");
+        return View();
     }
 
-    [HttpPost] // Handle create form submission.
-    [ValidateAntiForgeryToken] // Prevent request forgery.
+    // Handle form submission for creating event
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind("EventId,EventName,Date,Time,VenueId")] Event ev)
     {
-        if (ModelState.IsValid) // Check if input is valid.
+        if (ModelState.IsValid)
         {
-            _context.Add(ev); // Add new event to database.
-            await _context.SaveChangesAsync(); // Save changes to database.
-            return RedirectToAction(nameof(Index)); // Go to event list.
+            // Check for double booking
+            var existingEvent = await _context.Events.FirstOrDefaultAsync(e =>
+                e.VenueId == ev.VenueId &&
+                e.Date.Date == ev.Date.Date &&
+                e.Time.TimeOfDay == ev.Time.TimeOfDay);
+
+            if (existingEvent != null)
+            {
+                ModelState.AddModelError("", "This venue is already booked for the selected date and time.");
+            }
+            else
+            {
+                _context.Add(ev);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
         }
-        // Repopulate dropdown on error.
-        ViewData["VenueId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Venues, "VenueId", "VenueName", ev.VenueId);
-        return View(ev); // Redisplay form with errors.
+
+        ViewData["VenueId"] = new SelectList(_context.Venues, "VenueId", "VenueName", ev.VenueId);
+        return View(ev);
     }
 
-    public async Task<IActionResult> Edit(int? id) // Show edit event form.
+    // Show edit form
+    public async Task<IActionResult> Edit(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null) return NotFound();
 
-        var ev = await _context.Events.FindAsync(id); // Find event to edit.
-        if (ev == null) return NotFound(); // Event not found.
+        var ev = await _context.Events.FindAsync(id);
+        if (ev == null) return NotFound();
 
-        // Populate VenueId dropdown.
-        ViewData["VenueId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Venues, "VenueId", "VenueName", ev.VenueId);
-        return View(ev); // Display edit form.
+        ViewData["VenueId"] = new SelectList(_context.Venues, "VenueId", "VenueName", ev.VenueId);
+        return View(ev);
     }
 
-    [HttpPost] // Handle edit form submission.
-    [ValidateAntiForgeryToken] // Prevent request forgery.
+    // Handle form submission for editing
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(int id, [Bind("EventId,EventName,Date,Time,VenueId")] Event ev)
     {
-        if (id != ev.EventId) return NotFound(); // ID mismatch.
+        if (id != ev.EventId) return NotFound();
 
-        if (ModelState.IsValid) // Check if input is valid.
+        if (ModelState.IsValid)
         {
-            try
+            // Check for conflicts with other events
+            var conflict = await _context.Events.FirstOrDefaultAsync(e =>
+                e.EventId != ev.EventId &&
+                e.VenueId == ev.VenueId &&
+                e.Date.Date == ev.Date.Date &&
+                e.Time.TimeOfDay == ev.Time.TimeOfDay);
+
+            if (conflict != null)
             {
-                _context.Update(ev); // Update existing event.
-                await _context.SaveChangesAsync(); // Save database changes.
+                ModelState.AddModelError("", "This venue is already booked for the selected date and time."); // error message
             }
-            catch (DbUpdateConcurrencyException) // Handle update conflicts.
+            else
             {
-                if (!_context.Events.Any(e => e.EventId == id)) // Event not found.
-                    return NotFound();
-                else throw; // Re-throw other errors.
+                try
+                {
+                    _context.Update(ev);
+                    await _context.SaveChangesAsync();
+                    return RedirectToAction(nameof(Index));
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!_context.Events.Any(e => e.EventId == id))
+                        return NotFound();
+                    else
+                        throw;
+                }
             }
-            return RedirectToAction(nameof(Index)); // Go to event list.
         }
-        // Repopulate dropdown on error.
-        ViewData["VenueId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Venues, "VenueId", "VenueName", ev.VenueId);
-        return View(ev); // Redisplay form with errors.
+
+        ViewData["VenueId"] = new SelectList(_context.Venues, "VenueId", "VenueName", ev.VenueId);
+        return View(ev);
     }
 
-    public async Task<IActionResult> Delete(int? id) // Show delete confirmation.
+    // Show delete confirmation
+    public async Task<IActionResult> Delete(int? id)
     {
-        if (id == null) return NotFound(); // Handle missing ID.
+        if (id == null) return NotFound();
 
-        var ev = await _context.Events // Find event with venue.
+        var ev = await _context.Events
             .Include(e => e.Venue)
             .FirstOrDefaultAsync(m => m.EventId == id);
-        if (ev == null) return NotFound(); // Event not found.
 
-        return View(ev); // Display delete view.
+        if (ev == null) return NotFound();
+
+        return View(ev);
     }
 
-    [HttpPost, ActionName("Delete")] // Handle delete confirmation.
-    [ValidateAntiForgeryToken] // Prevent request forgery.
+    // Delete the event (if no bookings exist)
+    [HttpPost, ActionName("Delete")]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
-        var ev = await _context.Events.FindAsync(id); // Find event to delete.
-        _context.Events.Remove(ev); // Remove event from database.
-        await _context.SaveChangesAsync(); // Save database changes.
-        return RedirectToAction(nameof(Index)); // Go to event list.
+        var hasBookings = await _context.Bookings.AnyAsync(b => b.EventId == id);
+
+        if (hasBookings)
+        {
+            ModelState.AddModelError("", "Cannot delete this event because it has existing bookings.");
+            var ev = await _context.Events.Include(e => e.Venue).FirstOrDefaultAsync(e => e.EventId == id);
+            return View("Delete", ev);
+        }
+
+        var evToDelete = await _context.Events.FindAsync(id);
+        _context.Events.Remove(evToDelete);
+        await _context.SaveChangesAsync();
+
+        return RedirectToAction(nameof(Index));
     }
 }

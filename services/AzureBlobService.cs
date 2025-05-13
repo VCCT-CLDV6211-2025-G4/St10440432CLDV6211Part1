@@ -16,7 +16,7 @@ namespace BookingSystemCLVD.Services
             _configuration = configuration;
         }
 
-        public async Task<string> UploadFileAsync(IFormFile file)
+        public async Task<string> UploadFileAsync(IFormFile file)//AI USED HERE FOR STRUCTURE//
         {
             if (file == null || file.Length == 0)
                 throw new ArgumentException("File is empty or null");

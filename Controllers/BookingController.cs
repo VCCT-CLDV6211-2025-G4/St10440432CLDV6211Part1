@@ -1,6 +1,7 @@
 ﻿using BookingSystemCLVD.Data;
 using BookingSystemCLVD.Models;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using System.Linq;
 using System.Threading.Tasks;
@@ -11,88 +12,116 @@ public class BookingController : Controller
 
     public BookingController(ApplicationDbContext context)
     {
-        _context = context;
+        _context = context; // database context injection
     }
 
-    // GET: Booking
-    public async Task<IActionResult> Index()
+    // Show list of bookings, with optional search
+    public async Task<IActionResult> Index(string searchTerm)
     {
-        // Include related Event data when listing bookings
-        var bookings = await _context.Bookings
-                                     .Include(b => b.Event)
-                                     .ToListAsync();
-        return View(bookings);
+        var bookings = _context.Bookings
+                               .Include(b => b.Event)              // include related event
+                               .ThenInclude(e => e.Venue)         // include related venue
+                               .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            // filter by booking ID or event name
+            bookings = bookings.Where(b =>
+                b.BookingId.ToString().Contains(searchTerm) ||
+                b.Event.EventName.Contains(searchTerm));
+        }
+
+        return View(await bookings.ToListAsync());
     }
 
-    // GET: Booking/Details/5
+    // Show details for one booking
     public async Task<IActionResult> Details(int? id)
     {
-        if (id == null)
-            return NotFound();
+        if (id == null) return NotFound();
 
-        // Fetch booking with associated event
         var booking = await _context.Bookings
                                     .Include(b => b.Event)
+                                    .ThenInclude(e => e.Venue)
                                     .FirstOrDefaultAsync(m => m.BookingId == id);
-        if (booking == null)
-            return NotFound();
+        if (booking == null) return NotFound();
 
         return View(booking);
     }
 
-    // GET: Booking/Create
+    // Display form to create a new booking
     public IActionResult Create()
     {
-        // Populate Event dropdown list
-        ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName");
+        ViewData["EventId"] = new SelectList(_context.Events, "EventId", "EventName");
         return View();
     }
 
-    // POST: Booking/Create
+    // Handle submission of new booking form
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create([Bind("BookingId,AttendeeName,AttendeeEmail,EventId")] Booking booking)
     {
+        // make sure selected event exists
+        var selectedEvent = await _context.Events
+                                          .Include(e => e.Venue)
+                                          .FirstOrDefaultAsync(e => e.EventId == booking.EventId);
+
+        if (selectedEvent == null)
+        {
+            ModelState.AddModelError("", "Invalid event selection.");
+        }
+        else
+        {
+            // check for duplicate booking (same venue, date, time)
+            bool isDuplicate = await _context.Bookings
+                .Include(b => b.Event)
+                .AnyAsync(b =>
+                    b.Event.VenueId == selectedEvent.VenueId &&
+                    b.Event.Date == selectedEvent.Date &&
+                    b.Event.Time == selectedEvent.Time &&
+                    b.AttendeeEmail == booking.AttendeeEmail);
+
+            if (isDuplicate)
+            {
+                ModelState.AddModelError("", "You have already booked this event or a similar one at the same venue, date, and time.");
+            }
+        }
+
         if (ModelState.IsValid)
         {
-            _context.Add(booking);
+            _context.Add(booking);           // save new booking
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
         }
 
-        // Repopulate Event dropdown if model is invalid
-        ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName", booking.EventId);
+        // if there was a problem, redisplay form
+        ViewData["EventId"] = new SelectList(_context.Events, "EventId", "EventName", booking.EventId);
         return View(booking);
     }
 
-    // GET: Booking/Edit/5
+    // Display form to edit an existing booking
     public async Task<IActionResult> Edit(int? id)
     {
-        if (id == null)
-            return NotFound();
+        if (id == null) return NotFound();
 
         var booking = await _context.Bookings.FindAsync(id);
-        if (booking == null)
-            return NotFound();
+        if (booking == null) return NotFound();
 
-        // Populate Event dropdown with selected value
-        ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName", booking.EventId);
+        ViewData["EventId"] = new SelectList(_context.Events, "EventId", "EventName", booking.EventId);
         return View(booking);
     }
 
-    // POST: Booking/Edit/5
+    // Handle submission of edit form
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(int id, [Bind("BookingId,AttendeeName,AttendeeEmail,EventId")] Booking booking)
     {
-        if (id != booking.BookingId)
-            return NotFound();
+        if (id != booking.BookingId) return NotFound();
 
         if (ModelState.IsValid)
         {
             try
             {
-                _context.Update(booking);
+                _context.Update(booking);     // apply changes
                 await _context.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
@@ -105,35 +134,36 @@ public class BookingController : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        // Repopulate Event dropdown on error
-        ViewData["EventId"] = new Microsoft.AspNetCore.Mvc.Rendering.SelectList(_context.Events, "EventId", "EventName", booking.EventId);
+        // if validation fails, show form again
+        ViewData["EventId"] = new SelectList(_context.Events, "EventId", "EventName", booking.EventId);
         return View(booking);
     }
 
-    // GET: Booking/Delete/5
+    // Show confirmation page to delete a booking
     public async Task<IActionResult> Delete(int? id)
     {
-        if (id == null)
-            return NotFound();
+        if (id == null) return NotFound();
 
-        // Fetch booking and related event
         var booking = await _context.Bookings
                                     .Include(b => b.Event)
+                                    .ThenInclude(e => e.Venue)
                                     .FirstOrDefaultAsync(m => m.BookingId == id);
-        if (booking == null)
-            return NotFound();
+        if (booking == null) return NotFound();
 
         return View(booking);
     }
 
-    // POST: Booking/Delete/5
+    // Actually delete the booking
     [HttpPost, ActionName("Delete")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteConfirmed(int id)
     {
         var booking = await _context.Bookings.FindAsync(id);
-        _context.Bookings.Remove(booking);
-        await _context.SaveChangesAsync();
+        if (booking != null)
+        {
+            _context.Bookings.Remove(booking);
+            await _context.SaveChangesAsync();
+        }
         return RedirectToAction(nameof(Index));
     }
 }
